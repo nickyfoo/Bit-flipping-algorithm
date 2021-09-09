@@ -1,0 +1,7 @@
+Sample format:
+Begins with order of field.
+next line is two integers, r and c, representing the number of rows and columns in the parity check matrix.
+next line is n, the number of entries in the (sparse) matrix.
+next n lines will have 3 integers, i,j, entry value, denoting the i,j entry in the matrix.
+next line is c integers representing the c initial variables x_i for i in range(c);
+next line is r integers representing the r desired solution variables b_i for i in range(r) for the system Ax = b;
