@@ -21,9 +21,9 @@ private:
 	// stored as al[u] = {v,var, deg1node} where var is the intermediate degree 2 variable node, deg1node is the degree1node if applicable, -1 otherwise.
 	std::vector<std::vector<std::tuple<int, int, int>>> al; 
 	// distance from one eqn node to another eqn node, for APSP
-	std::vector<std::vector<int>> d;
+	std::vector<std::vector<int>> APSPDistance;
 	// next is the next node in the path
-	std::vector<std::vector<std::tuple<int, int, int>>> next;
+	std::vector<std::vector<std::tuple<int, int, int>>> APSPNext;
 	double maxBeta;
 
 public:
@@ -41,14 +41,13 @@ public:
 		beta.resize(numVars);
 		al.resize(numEqns);
 		b.assign(numEqns, Galois::Element(gf, 0));
-		d.assign(numEqns, std::vector<int>(numEqns, 1e9));
-		next.assign(numEqns, std::vector<std::tuple<int,int,int>>(numEqns, { -1,-1,-1 }));
+		APSPDistance.assign(numEqns, std::vector<int>(numEqns, 1e9));
+		APSPNext.assign(numEqns, std::vector<std::tuple<int,int,int>>(numEqns, { -1,-1,-1 }));
+		setupAL();
 	}
 
 	void setupAL();
 
-	void floydWarshall();
-	std::vector<std::tuple<int, int, int>> getPath(int u, int v);
 
 	void assignX(std::vector<int> xs);
 	void assignB(std::vector<int> bs);
@@ -56,7 +55,16 @@ public:
 	void update(int i);
 	void getXiPrimeTiBi(int i);
 	int getMaxBetaIndex();
-	void flip(int i);
+
+	void FloydWarshall();
+	void FloydWarshall_flip(int i);
+	std::vector<std::tuple<int, int, int>> FloydWarshall_getPath(int u, int v);
+	bool FloydWarshall_findFlippingPath(int startNode);
+
+	void Dijkstra(int startNode, std::vector<int>& d, std::vector<std::tuple<int, int, int, int>>& prev);
+	void Dijkstra_flip(int i);
+	std::vector<std::tuple<int, int, int>> Dijkstra_getPath(int u, int v, std::vector<std::tuple<int, int, int, int>>& prev);
+	bool Dijkstra_findFlippingPath(int startNode);
 
 	// solving the equations using extended bit flipping algorithm
 	void solve_extended_bit_flipping_consecutively();

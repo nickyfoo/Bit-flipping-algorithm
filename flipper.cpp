@@ -22,39 +22,70 @@ void Flipper::setupAL() {
 }
 
 
-void Flipper::floydWarshall() {
-	setupAL();
+void Flipper::FloydWarshall() {
 	for (int i = 0; i < numEqns; i++) {
 		for (auto& [j, intermediate, deg1Node] : al[i]) {
-			d[i][j] = 1;
-			next[i][j] = { j, intermediate, deg1Node };
+			APSPDistance[i][j] = 1;
+			APSPNext[i][j] = { j, intermediate, deg1Node };
 		}
 	}
 
 	for (int i = 0; i < numEqns; i++) {
-		d[i][i] = 0;
-		next[i][i] = { i, -1, matrix->getIndexOfAdjSingleVar(i) };
+		APSPDistance[i][i] = 0;
+		APSPNext[i][i] = { i, -1, matrix->getIndexOfAdjSingleVar(i) };
 	}
 	for (int k = 0; k < numEqns; k++) {
 		for (int i = 0; i < numEqns; i++) {
 			for (int j = 0; j < numEqns; j++) {
-				if (d[i][j] > d[i][k] + d[k][j]) {
-					d[i][j] = d[i][k] + d[k][j];
-					next[i][j] = next[i][k];
+				if (APSPDistance[i][j] > APSPDistance[i][k] + APSPDistance[k][j]) {
+					APSPDistance[i][j] = APSPDistance[i][k] + APSPDistance[k][j];
+					APSPNext[i][j] = APSPNext[i][k];
 				}
 			}
 		}
 	}
-
 }
 
-std::vector<std::tuple<int,int,int>> Flipper::getPath(int u, int v) {
+void Flipper::Dijkstra(int startNode, std::vector<int>& d, std::vector<std::tuple<int, int, int, int>>& prev) {
+	std::set<std::pair<int, int>> pq;
+	d.assign(numEqns, 1e9);
+	prev.assign(numEqns, { -1,-1,-1,-1 });
+	d[startNode] = 0;
+	pq.insert({ d[startNode], startNode });
+	while (pq.size()) {
+		auto [du, u] = *pq.begin();
+		pq.erase(pq.begin());
+		if (du > d[u]) continue;
+		for (auto& [v, var, deg1node] : al[u]) {
+			if (du + 1 < d[v]) {
+				d[v] = du + 1;
+				prev[v] = { u,v,var,deg1node };
+				pq.insert({ d[v],v });
+			}
+		}
+	}
+}
+
+ std::vector<std::tuple<int, int, int>> Flipper::Dijkstra_getPath(int u, int v, std::vector<std::tuple<int, int, int, int>>& prev) {
 	std::vector<std::tuple<int, int, int>> ans;
-	if (next[u][v] == std::make_tuple(-1, -1, -1)) return ans;
-	ans.push_back(next[u][u]);
+	int curr = v;
+	while (curr != u) {
+		auto&[uu, vv, var, deg1node] = prev[curr];
+		curr = uu;
+		ans.push_back({ vv, var, deg1node });
+	}
+	ans.push_back({ u,-1,-1 });
+	std::reverse(ans.begin(), ans.end());
+	return ans;
+}
+
+std::vector<std::tuple<int,int,int>> Flipper::FloydWarshall_getPath(int u, int v) {
+	std::vector<std::tuple<int, int, int>> ans;
+	if (APSPNext[u][v] == std::make_tuple(-1, -1, -1)) return ans;
+	ans.push_back(APSPNext[u][u]);
 	while (u != v) {
-		auto& [nextNode, intermediate, degree1Node] = next[u][v];
-		ans.push_back(next[u][v]);
+		auto& [nextNode, intermediate, degree1Node] = APSPNext[u][v];
+		ans.push_back(APSPNext[u][v]);
 		u = nextNode;
 	}
 	return ans;
@@ -117,7 +148,62 @@ void Flipper::update(int i) {
 	}
 }
 
-void Flipper::flip(int i) {
+bool Flipper::FloydWarshall_findFlippingPath(int startNode) {
+	int endNode = -1, deg1EqnNode = -1, deg1VarNode = -1; //deg1EqnNode is adj to deg1VarNode
+	bool foundPath = false;
+	std::unordered_set<int> affectedNodes; // for update;
+	for (int i = 0; i < numEqns; i++) {
+		//keep track of deg1 nodes we have seen
+		if (deg1EqnNode == -1 && APSPDistance[startNode][i] != 1e9) {
+			int index = matrix->getIndexOfAdjSingleVar(i);
+			if (index != -1) {
+				deg1EqnNode = i;
+				deg1VarNode = index;
+			}
+		}
+		if (i == startNode) continue;
+		// Reachable and not satisfied
+		if (APSPDistance[startNode][i] != 1e9) {
+			if (!matrix->isEqnSatisfied(i, x, b[i])) {
+				endNode = i;
+				break;
+			}
+		}
+	}
+	//there are 2 unsatisfied nodes
+	if (endNode != -1) {
+		std::vector<std::tuple<int, int, int>> path = FloydWarshall_getPath(startNode, endNode);
+		//start flipping the intermediates
+		for (int i = 1; i < path.size(); i++) {
+			auto& [u, prevIntermediate, prevDeg1Node] = path[i - 1];
+			auto& [v, intermediate, deg1Node] = path[i];
+			x[intermediate] = matrix->solveEqn(u, intermediate, x, b[u]);
+			affectedNodes.insert(intermediate);
+		}
+		foundPath = true;
+	}
+	else if(deg1EqnNode!=-1) {
+		std::vector<std::tuple<int, int, int>> path = FloydWarshall_getPath(startNode, deg1EqnNode);
+		//start flipping the intermediates
+		for (int i = 1; i < path.size(); i++) {
+			auto& [u, prevIntermediate, prevDeg1Node] = path[i - 1];
+			auto& [v, intermediate, deg1Node] = path[i];
+			x[intermediate] = matrix->solveEqn(u, intermediate, x, b[u]);
+			affectedNodes.insert(intermediate);
+		}
+		auto& [v, intermediate, deg1Node] = *path.rbegin();
+		x[deg1VarNode] = matrix->solveEqn(v, deg1VarNode, x, b[v]);
+		affectedNodes.insert(deg1VarNode);
+		foundPath = true;
+	}
+
+	for (auto& u : affectedNodes) {
+		update(u);
+	}
+	return foundPath;
+}
+
+void Flipper::FloydWarshall_flip(int i) {
 	//step 4
 	if (maxBeta > 0) {
 		x[i] = xiPrime[i];
@@ -125,63 +211,96 @@ void Flipper::flip(int i) {
 	}
 	//step 5
 	else {
-		int startNode; 
-		int endNode=-1, deg1EqnNode=-1, deg1VarNode=-1; //deg1EqnNode is adj to deg1VarNode
+		for (auto& [adjEqn, entry] : *(matrix->getAdjacentEquations(i))) {
+			if (!matrix->isEqnSatisfied(adjEqn, x, b[adjEqn])) {
+				if (FloydWarshall_findFlippingPath(adjEqn)) {
+					return;
+				}
+			}
+		}
+	}
+}
+
+
+void Flipper::Dijkstra_flip(int i) {
+	//step 4
+	if (maxBeta > 0) {
+		x[i] = xiPrime[i];
+		update(i);
+	}
+	//step 5
+	else {
+		int startNode;
+		int endNode = -1, deg1EqnNode = -1, deg1VarNode = -1; //deg1EqnNode is adj to deg1VarNode
 		std::unordered_set<int> affectedNodes; // for update;
 		for (auto& [adjEqn, entry] : *(matrix->getAdjacentEquations(i))) {
 			if (!matrix->isEqnSatisfied(adjEqn, x, b[adjEqn])) {
-				startNode = adjEqn;
+				if (Dijkstra_findFlippingPath(adjEqn)) {
+					return;
+				}
+			}
+		}
+	}
+
+}
+
+
+bool Flipper::Dijkstra_findFlippingPath(int startNode) {
+	std::vector<int> d;
+	std::vector<std::tuple<int, int, int, int>> prev;
+	Dijkstra(startNode, d, prev);
+	int endNode = -1, deg1EqnNode = -1, deg1VarNode = -1; //deg1EqnNode is adj to deg1VarNode
+	bool foundPath = false;
+	std::unordered_set<int> affectedNodes; // for update;
+	for (int i = 0; i < numEqns; i++) {
+		//keep track of deg1 nodes we have seen
+		if (deg1EqnNode == -1 && d[i] != 1e9) {
+			int index = matrix->getIndexOfAdjSingleVar(i);
+			if (index != -1) {
+				deg1EqnNode = i;
+				deg1VarNode = index;
+			}
+		}
+		if (i == startNode) continue;
+		// Reachable and not satisfied
+		if (d[i] != 1e9) {
+			if (!matrix->isEqnSatisfied(i, x, b[i])) {
+				endNode = i;
 				break;
 			}
 		}
-		
-		for (int i = 0; i < numEqns; i++) {
-			//keep track of deg1 nodes we have seen
-			if (deg1EqnNode == -1 && d[startNode][i] != 1e9) {
-				int index = matrix->getIndexOfAdjSingleVar(i);
-				if (index != -1) {
-					deg1EqnNode = i;
-					deg1VarNode = index;
-				}
-			}
-			if (i == startNode) continue;
-			// Reachable and not satisfied
-			if (d[startNode][i] != 1e9){
-				if (!matrix->isEqnSatisfied(i, x, b[i])) {
-					endNode = i;
-					break;
-				}
-			}
-		}
-		//there are 2 unsatisfied nodes
-		if (endNode != -1){
-			std::vector<std::tuple<int, int, int>> path = getPath(startNode, endNode);
-			//start flipping the intermediates
-			for (int i = 1; i < path.size(); i++) {
-				auto& [u, prevIntermediate, prevDeg1Node] = path[i - 1];
-				auto& [v, intermediate, deg1Node] = path[i];
-				x[intermediate] = matrix->solveEqn(u, intermediate, x, b[u]);
-				affectedNodes.insert(intermediate);
-			}
-		}
-		else {
-			std::vector<std::tuple<int, int, int>> path = getPath(startNode, deg1EqnNode);
-			//start flipping the intermediates
-			for (int i = 1; i < path.size(); i++) {
-				auto& [u, prevIntermediate, prevDeg1Node] = path[i - 1];
-				auto& [v, intermediate, deg1Node] = path[i];
-				x[intermediate] = matrix->solveEqn(u, intermediate, x, b[u]);
-				affectedNodes.insert(intermediate);
-			}
-			auto& [v, intermediate, deg1Node] = *path.rbegin();
-			x[deg1VarNode] = matrix->solveEqn(v, deg1VarNode, x, b[v]);
-			affectedNodes.insert(deg1VarNode);
-		}
-
-		for (auto& u : affectedNodes) {
-			update(u);
-		}
 	}
+	//there are 2 unsatisfied nodes
+	if (endNode != -1) {
+		std::vector<std::tuple<int, int, int>> path = Dijkstra_getPath(startNode, endNode, prev);
+		//start flipping the intermediates
+		for (int i = 1; i < path.size(); i++) {
+			auto& [u, prevIntermediate, prevDeg1Node] = path[i - 1];
+			auto& [v, intermediate, deg1Node] = path[i];
+			x[intermediate] = matrix->solveEqn(u, intermediate, x, b[u]);
+			affectedNodes.insert(intermediate);
+		}
+		foundPath = true;
+	}
+	else if (deg1EqnNode != -1) {
+		std::vector<std::tuple<int, int, int>> path = Dijkstra_getPath(startNode, deg1EqnNode, prev);
+		//start flipping the intermediates
+		for (int i = 1; i < path.size(); i++) {
+			auto& [u, prevIntermediate, prevDeg1Node] = path[i - 1];
+			auto& [v, intermediate, deg1Node] = path[i];
+			x[intermediate] = matrix->solveEqn(u, intermediate, x, b[u]);
+			affectedNodes.insert(intermediate);
+		}
+		auto& [v, intermediate, deg1Node] = *path.rbegin();
+		x[deg1VarNode] = matrix->solveEqn(v, deg1VarNode, x, b[v]);
+		affectedNodes.insert(deg1VarNode);
+		foundPath = true;
+	}
+
+	for (auto& u : affectedNodes) {
+		update(u);
+	}
+	return foundPath;
 }
 
 //Flips one at a time, checking for new max beta value every time.
@@ -189,12 +308,12 @@ void Flipper::solve_extended_bit_flipping_consecutively() {
 	for (int i = 0; i < numVars; i++) {
 		getXiPrimeTiBi(i);
 	}
-	floydWarshall();
+	//floydWarshall();
 	int index = getMaxBetaIndex();
 	std::cout << *this << '\n';
 	while (beta[index] != -1) {
 		std::cout << "current beta is: " << beta[index] << ", flipping: " << index << '\n';
-		flip(index);
+		Dijkstra_flip(index);
 		std::cout << *this << '\n';
 		index = getMaxBetaIndex();
 	}
@@ -206,7 +325,7 @@ void Flipper::solve_extended_bit_flipping_with_Omega() {
 	for (int i = 0; i < numVars; i++) {
 		getXiPrimeTiBi(i);
 	}
-	floydWarshall();
+	FloydWarshall();
 	int index = getMaxBetaIndex();
 	std::set<int> Omega;
 	for (int i = 0; i < numVars; i++) {
@@ -223,7 +342,7 @@ void Flipper::solve_extended_bit_flipping_with_Omega() {
 			std::cout << "Omega contains: ";
 			for (auto& x : Omega) std::cout << x << ' ';
 			std::cout << '\n';
-			flip(*Omega.begin());
+			FloydWarshall_flip(*Omega.begin());
 			std::set<int> updatedOmega;
 			for (auto&i : Omega) {
 				if (beta[i] == maxBeta) {

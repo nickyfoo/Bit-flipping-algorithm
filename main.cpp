@@ -5,9 +5,10 @@
 #include "matrix.h"
 #include "flipper.h"
 
+// For taking input
 int main(int argc, char *argv[]) {
 	std::ifstream inputfile;
-	inputfile.open("./sample_F5.txt", std::ios::in);
+	inputfile.open("./sample_F2.txt", std::ios::in);
 	if (inputfile.is_open()) {
 		int fieldOrder; inputfile >> fieldOrder;
 		Galois::Field gf(fieldOrder);
@@ -30,7 +31,8 @@ int main(int argc, char *argv[]) {
 		for (int i = 0; i < row; i++) {
 			inputfile >> b[i];
 		}
-		f.assignB(b);
+		f.assignB(b); 
+		f.FloydWarshall();
 		m.findSingleVar();
 		std::cout << m;
 		f.solve_extended_bit_flipping_consecutively();
