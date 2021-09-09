@@ -1,13 +1,37 @@
 #include <galois++/element.h>
 #include "matrix.h"
 #include <map>
+#include <random>
 
-void Matrix::insert(int i, int j, Galois::Element x) {
+bool Matrix::insert(int i, int j, Galois::Element x) {
 	if (0 <= i && i < m && 0 <= j && j < n) {
+		if (filledEntries.find({ i,j }) != filledEntries.end()) {
+			return false;
+		}
 		equationWiseEntries[i].push_back({ j,x });
 		variableWiseEntries[j].push_back({ i,x });
+		filledEntries.insert({ i,j });
+		return true;
+	}
+	return false;
+}
+
+void Matrix::random() {
+	std::random_device rd;  //Will be used to obtain a seed for the random number engine
+	std::mt19937 gen(rd()); //Standard mersenne_twister_engine seeded with rd()
+	std::uniform_int_distribution<> colWeight(1, 2);
+	std::uniform_int_distribution<> randRow(0, m-1);
+	std::uniform_int_distribution<> entry(1, (gf->q)-1);
+	for (int j = 0; j < n; j++) {
+		int columnWeight = colWeight(gen);
+		for (int k = 0; k < columnWeight; k++) {
+			int i = randRow(gen);
+			int entryVal = entry(gen);
+			insert(i, j, Galois::Element(gf, entryVal));
+		}
 	}
 }
+
 
 /**
 	\brief solves cx=d for parity check equation eqn, and variable var. 

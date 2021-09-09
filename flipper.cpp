@@ -98,10 +98,30 @@ void Flipper::assignX(std::vector<int> xs) {
 	}
 }
 
+void Flipper::printX() {
+	for (auto& xi : x) {
+		std::cout << xi.value() << ' ';
+	} std::cout << '\n';
+}
+
+bool Flipper::isZeroVector() {
+	for (auto& xi : x) {
+		if (xi != Galois::Element(gf, 0)) return false;
+	}
+	return true;
+}
+
 void Flipper::assignB(std::vector<int> bs) {
 	for (int i = 0; i < numEqns; i++) {
 		b[i] = Galois::Element(gf, bs[i]);
 	}
+}
+
+bool Flipper::isMatrixSatisfied() {
+	for (int i = 0; i < numEqns; i++) {
+		if (!matrix->isEqnSatisfied(i, x, b[i])) return false;
+	}
+	return true;
 }
 
 void Flipper::getXiPrimeTiBi(int i) {
@@ -173,6 +193,11 @@ bool Flipper::FloydWarshall_findFlippingPath(int startNode) {
 	//there are 2 unsatisfied nodes
 	if (endNode != -1) {
 		std::vector<std::tuple<int, int, int>> path = FloydWarshall_getPath(startNode, endNode);
+		std::cout << "2unsatpath:\n"; 
+		for (auto& [a, b, c] : path) {
+			std::cout << a << ' ' << b << ' ' << c << '\n';
+		}
+		std::cout << '\n';
 		//start flipping the intermediates
 		for (int i = 1; i < path.size(); i++) {
 			auto& [u, prevIntermediate, prevDeg1Node] = path[i - 1];
@@ -184,6 +209,12 @@ bool Flipper::FloydWarshall_findFlippingPath(int startNode) {
 	}
 	else if(deg1EqnNode!=-1) {
 		std::vector<std::tuple<int, int, int>> path = FloydWarshall_getPath(startNode, deg1EqnNode);
+
+		std::cout << "deg1 path:\n";
+		for (auto& [a, b, c] : path) {
+			std::cout << a << ' ' << b << ' ' << c << '\n';
+		}
+		std::cout << '\n';
 		//start flipping the intermediates
 		for (int i = 1; i < path.size(); i++) {
 			auto& [u, prevIntermediate, prevDeg1Node] = path[i - 1];
@@ -222,11 +253,12 @@ void Flipper::FloydWarshall_flip(int i) {
 }
 
 
-void Flipper::Dijkstra_flip(int i) {
+bool Flipper::Dijkstra_flip(int i) {
 	//step 4
 	if (maxBeta > 0) {
 		x[i] = xiPrime[i];
 		update(i);
+		return true;
 	}
 	//step 5
 	else {
@@ -236,10 +268,11 @@ void Flipper::Dijkstra_flip(int i) {
 		for (auto& [adjEqn, entry] : *(matrix->getAdjacentEquations(i))) {
 			if (!matrix->isEqnSatisfied(adjEqn, x, b[adjEqn])) {
 				if (Dijkstra_findFlippingPath(adjEqn)) {
-					return;
+					return true;
 				}
 			}
 		}
+		return false;
 	}
 
 }
@@ -304,22 +337,43 @@ bool Flipper::Dijkstra_findFlippingPath(int startNode) {
 }
 
 //Flips one at a time, checking for new max beta value every time.
-void Flipper::solve_extended_bit_flipping_consecutively() {
+void Flipper::FloydWarshall_solve_extended_bit_flipping_consecutively() {
 	for (int i = 0; i < numVars; i++) {
 		getXiPrimeTiBi(i);
 	}
-	//floydWarshall();
+	FloydWarshall();
 	int index = getMaxBetaIndex();
-	std::cout << *this << '\n';
-	while (beta[index] != -1) {
-		std::cout << "current beta is: " << beta[index] << ", flipping: " << index << '\n';
-		Dijkstra_flip(index);
-		std::cout << *this << '\n';
+	//std::cout << *this << '\n';
+	int numIterations = 0;
+	while (beta[index] != -1 && numIterations < 2*numEqns) {
+		//std::cout << "current beta is: " << beta[index] << ", flipping: " << index << '\n';
+		FloydWarshall_flip(index);
+		//std::cout << *this << '\n';
 		index = getMaxBetaIndex();
+		numIterations++;
 	}
-	std::cout << *this << '\n';
+	//std::cout << *this << '\n';
 }
 
+
+bool Flipper::Dijkstra_solve_extended_bit_flipping_consecutively() {
+	for (int i = 0; i < numVars; i++) {
+		getXiPrimeTiBi(i);
+	}
+	int index = getMaxBetaIndex();
+	//std::cout << *this << '\n';
+	int numIterations = 0;
+	while (beta[index] != -1 && numIterations < 2*numEqns) {
+		//std::cout << "current beta is: " << beta[index] << ", flipping: " << index << '\n';
+		if (!Dijkstra_flip(index)) break;
+		//std::cout << *this << '\n';
+		index = getMaxBetaIndex();
+		numIterations++;
+	}
+
+	return isMatrixSatisfied();
+	//std::cout << *this << '\n';
+}
 
 void Flipper::solve_extended_bit_flipping_with_Omega() {
 	for (int i = 0; i < numVars; i++) {
@@ -362,9 +416,9 @@ void Flipper::solve_extended_bit_flipping_with_Omega() {
 
 // returns failure flag
 bool Flipper::solve_single_threshold_decoding(int threshold) {
-	std::cout << "Original x is: ";
-	for (auto& xi : x) std::cout << xi << ' ';
-	std::cout << '\n';
+	//std::cout << "Original x is: ";
+	//for (auto& xi : x) std::cout << xi << ' ';
+	//std::cout << '\n';
 	bool flipped = true;
 	while (flipped) {
 		flipped = false;
@@ -392,19 +446,16 @@ bool Flipper::solve_single_threshold_decoding(int threshold) {
 			if (numSatisfiedToElt.size() == 0) continue;
 			auto& [numSatisfied, eltVal] = *numSatisfiedToElt.rbegin();
 			if (numSatisfied - numZeroMessages > threshold) {
-				std::cout << i << ": numSatisfied = " << numSatisfied << ", numZeroMessages = " << numZeroMessages << ", threshold = " << threshold << ", Flipping " << i << '\n';
+				//std::cout << i << ": numSatisfied = " << numSatisfied << ", numZeroMessages = " << numZeroMessages << ", threshold = " << threshold << ", Flipping " << i << '\n';
 				x[i] = Galois::Element(gf, eltVal);
 				flipped = true;
-				std::cout << "x is: ";
-				for (auto& xi : x) std::cout << xi << ' ';
-				std::cout << '\n';
+				//std::cout << "x is: ";
+				//for (auto& xi : x) std::cout << xi << ' ';
+				//std::cout << '\n';
 			}
 		}
 	}
-	for (int i = 0; i < numEqns; i++) {
-		if (!matrix->isEqnSatisfied(i, x, b[i])) return false;
-	}
-	return true;
+	return isMatrixSatisfied();
 }
 
 bool Flipper::solve_multiple_threshold_decoding(std::vector<int> thresholds) {
@@ -412,14 +463,11 @@ bool Flipper::solve_multiple_threshold_decoding(std::vector<int> thresholds) {
 	sort(thresholds.begin(), thresholds.end());
 	for (int i = numThresholds-1; i>=0; i--){
 		int threshold = thresholds[i];
-		std::cout << "Multiple threshold decoding with threshold = " << threshold << '\n';
+		//std::cout << "Multiple threshold decoding with threshold = " << threshold << '\n';
 		solve_single_threshold_decoding(threshold);
 	}
 
-	for (int i = 0; i < numEqns; i++) {
-		if (!matrix->isEqnSatisfied(i, x, b[i])) return false;
-	}
-	return true;
+	return isMatrixSatisfied();
 }
 
 std::ostream& operator<<(std::ostream& output, Flipper& flipper) {

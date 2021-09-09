@@ -49,8 +49,11 @@ public:
 	void setupAL();
 
 
+	bool isZeroVector();
 	void assignX(std::vector<int> xs);
+	void printX();
 	void assignB(std::vector<int> bs);
+	bool isMatrixSatisfied();
 
 	void update(int i);
 	void getXiPrimeTiBi(int i);
@@ -62,12 +65,13 @@ public:
 	bool FloydWarshall_findFlippingPath(int startNode);
 
 	void Dijkstra(int startNode, std::vector<int>& d, std::vector<std::tuple<int, int, int, int>>& prev);
-	void Dijkstra_flip(int i);
+	bool Dijkstra_flip(int i);
 	std::vector<std::tuple<int, int, int>> Dijkstra_getPath(int u, int v, std::vector<std::tuple<int, int, int, int>>& prev);
 	bool Dijkstra_findFlippingPath(int startNode);
 
 	// solving the equations using extended bit flipping algorithm
-	void solve_extended_bit_flipping_consecutively();
+	void FloydWarshall_solve_extended_bit_flipping_consecutively();
+	bool Dijkstra_solve_extended_bit_flipping_consecutively();
 	void solve_extended_bit_flipping_with_Omega();
 
 	// solving the equations using multiple threshold decoding
