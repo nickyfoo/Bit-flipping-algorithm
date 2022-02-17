@@ -26,6 +26,8 @@ private:
 	std::vector<std::vector<std::tuple<int, int, int>>> APSPNext;
 	double maxBeta;
 
+	int numPathsFound = 0;
+
 public:
 	Flipper(Matrix* m) {
 		matrix = m;
@@ -39,11 +41,11 @@ public:
 		xiPrime.assign(numVars, Galois::Element(gf, 0));
 		t.resize(numVars);
 		beta.resize(numVars);
-		al.resize(numEqns);
+		//al.resize(numEqns);
 		b.assign(numEqns, Galois::Element(gf, 0));
-		APSPDistance.assign(numEqns, std::vector<int>(numEqns, 1e9));
-		APSPNext.assign(numEqns, std::vector<std::tuple<int,int,int>>(numEqns, { -1,-1,-1 }));
-		setupAL();
+		//APSPDistance.assign(numEqns, std::vector<int>(numEqns, 1e9));
+		//APSPNext.assign(numEqns, std::vector<std::tuple<int,int,int>>(numEqns, { -1,-1,-1 }));
+		//setupAL();
 	}
 
 	void setupAL();
@@ -68,6 +70,8 @@ public:
 	bool Dijkstra_flip(int i);
 	std::vector<std::tuple<int, int, int>> Dijkstra_getPath(int u, int v, std::vector<std::tuple<int, int, int, int>>& prev);
 	bool Dijkstra_findFlippingPath(int startNode);
+
+	int Dijkstra_getNumPaths();
 
 	// solving the equations using extended bit flipping algorithm
 	void FloydWarshall_solve_extended_bit_flipping_consecutively();

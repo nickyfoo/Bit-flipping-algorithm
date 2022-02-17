@@ -268,6 +268,7 @@ bool Flipper::Dijkstra_flip(int i) {
 		for (auto& [adjEqn, entry] : *(matrix->getAdjacentEquations(i))) {
 			if (!matrix->isEqnSatisfied(adjEqn, x, b[adjEqn])) {
 				if (Dijkstra_findFlippingPath(adjEqn)) {
+					numPathsFound++;
 					return true;
 				}
 			}
@@ -371,8 +372,13 @@ bool Flipper::Dijkstra_solve_extended_bit_flipping_consecutively() {
 		numIterations++;
 	}
 
-	return isMatrixSatisfied();
+	return isZeroVector();
 	//std::cout << *this << '\n';
+}
+
+
+int Flipper::Dijkstra_getNumPaths() {
+	return numPathsFound;
 }
 
 void Flipper::solve_extended_bit_flipping_with_Omega() {
@@ -455,7 +461,7 @@ bool Flipper::solve_single_threshold_decoding(int threshold) {
 			}
 		}
 	}
-	return isMatrixSatisfied();
+	return isZeroVector();
 }
 
 bool Flipper::solve_multiple_threshold_decoding(std::vector<int> thresholds) {
@@ -467,7 +473,7 @@ bool Flipper::solve_multiple_threshold_decoding(std::vector<int> thresholds) {
 		solve_single_threshold_decoding(threshold);
 	}
 
-	return isMatrixSatisfied();
+	return isZeroVector();
 }
 
 std::ostream& operator<<(std::ostream& output, Flipper& flipper) {
